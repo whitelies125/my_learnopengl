@@ -138,18 +138,28 @@ int main()
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float vertices[] = {
-        -0.5f, -0.5f, 0.0f,  // left
-        0.5f,  -0.5f, 0.0f,  // right
-        0.0f,  0.5f,  0.0f   // top
+        0.5f,  0.5f,  0.0f,  // 右上角
+        0.5f,  -0.5f, 0.0f,  // 右下角
+        -0.5f, -0.5f, 0.0f,  // 左下角
+        -0.5f, 0.5f,  0.0f   // 左上角
     };
 
-    uint32_t Vbo, Vao;  // vertex buffer object, vertext array object
+    uint32_t indices[] = {
+        // 注意索引从0开始!
+        // 此例的索引(0,1,2,3)就是顶点数组vertices的下标，
+        // 这样可以由下标代表顶点组合成矩形
+        0, 1, 3,  // 第一个三角形
+        1, 2, 3   // 第二个三角形
+    };
+
+    uint32_t Vbo, Vao, Ebo;  // vertex buffer object, vertext array object
     // glGenVertexArrays: 生成 vertex array object name, 此时仅仅生成一个未使用的 id
     // {生成的 id 数量，出参}
     glGenVertexArrays(1, &Vao);
     // glGenBuffers: 生成 buffer object id, 此时仅仅生成一个未使用的 id
     // {生成的 id 数量，出参}
     glGenBuffers(1, &Vbo);
+    glGenBuffers(1, &Ebo);
     // bind the Vertex Array Object first, then bind and set vertex buffer(s), and then configure
     // vertex attributes(s).
     // glBindVertexArray: 绑定 vertex array object
@@ -185,6 +195,9 @@ int main()
     // {location index}  对应 shader 源码中的 location = 0 字段
     glEnableVertexAttribArray(0);
 
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
     // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex
     // attribute's bound vertex buffer object so afterwards we can safely unbind
     // 请注意，这是允许的，对 glVertexAttribPointer 的调用已将 VBO
@@ -192,6 +205,10 @@ int main()
     // 因此在glVertexAttribPointer之后我们可以安全地解除解除 GL_ARRAY_BUFFER 与 Vbo 绑定
     // 传参为 0, 表示解除 GL_ARRAY_BUFFER 与 Vbo 的绑定
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // remember: do NOT unbind the EBO while a VAO is active as the bound element buffer object IS
+    // stored in the VAO; keep the EBO bound.
+    // 当 VAO 激活时，不要解绑 EBO，因为绑定的 EBO 被存储在 VAO 中；需保持 EBO 绑定
+    // glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     // You can unbind the VAO afterwards so other VAO calls won't accidentally modify this VAO, but
     // this rarely happens. Modifying other VAOs requires a call to glBindVertexArray anyways so we
@@ -199,12 +216,12 @@ int main()
     // 您可以解除绑定 VAO，在之后其他 VAO 调用就不会意外地修改这个 VAO，但这种情况很少发生。
     // 修改其他 VAO 无论如何都需要调用 glBindVertexArray，因此我们通常不会在非必要的情况下解除
     // VAO（或 VBO）的绑定。
-    // 解除 VAO 的绑定
+    // glBindVertexArray: 解除 VAO 的绑定
     glBindVertexArray(0);
 
     // uncomment this call to draw in wireframe polygons.
     // 设置多边形的光栅化模式，这里传参意思是设置为线框多边形
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // render loop
     // -----------
@@ -227,7 +244,9 @@ int main()
         // glDrawArrays : 从数组数据渲染，
         // {mode, first 数组中的起始位置, count 要渲染的索引数量}
         // 它使用当前激活的着色器，之前定义的顶点属性配置，和VBO的顶点数据（通过VAO间接绑定）来绘制图元。
-        glDrawArrays(GL_TRIANGLES, 0, 3);
+        // glDrawArrays(GL_TRIANGLES, 0, 3);
+        // {mode, 渲染的元素数量，元素类型，偏移}
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         // glBindVertexArray(0); // no need to unbind it every time
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
@@ -240,6 +259,7 @@ int main()
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &Vao);
     glDeleteBuffers(1, &Vbo);
+    glDeleteBuffers(1, &Ebo);
     glDeleteProgram(shaderProgram);
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
