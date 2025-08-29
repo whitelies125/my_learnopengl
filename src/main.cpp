@@ -8,6 +8,8 @@
 #include <iostream>
 
 #include "shader.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react
 // accordingly
@@ -315,7 +317,7 @@ void shader()
     //     "   FragColor = ourColor;\n"
     //     "}\0";
 
-    Shader shader("./src/vertex_shader.txt", "./src/fragment_shader.txt");
+    Shader shader("./shader/vertex_shader.vs", "./shader/fragment_shader.fs");
     float vertices[] = {
         // 位置              // 颜色
         0.5f,  -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,  // 右下
@@ -376,9 +378,141 @@ void shader()
     glfwTerminate();
 }
 
+void texture()
+{
+    glfwInit();
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+    GLFWwindow *window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
+    if (window == NULL) {
+        std::cout << "Failed to create GLFW window" << std::endl;
+        glfwTerminate();
+        return;
+    }
+    glfwMakeContextCurrent(window);
+    glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+        std::cout << "Failed to initialize GLAD" << std::endl;
+        return;
+    }
+
+    // 生成纹理 id
+    uint32_t texture1;
+    glGenTextures(1, &texture1);
+    // 在绑定纹理之前先激活纹理单元，
+    glActiveTexture(GL_TEXTURE0);  // 纹理单元 0 是默认激活的
+    // 绑定纹理
+    glBindTexture(GL_TEXTURE_2D, texture1);
+    // 为当前绑定的纹理对象设置环绕、过滤方式
+    // S 是竖直的 y 轴，T 是横向的 x 轴
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // 加载并生成纹理
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("./texture/container.jpg", &width, &height, &nrChannels, 0);
+    if (data == nullptr) {
+        std::cout << "load texture1 fail" << std::endl;
+        return;
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    // 生成 mipmap
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+
+    uint32_t texture2;
+    glGenTextures(1, &texture2);
+    // 在绑定纹理之前先激活纹理单元，
+    glActiveTexture(GL_TEXTURE1);
+    // 绑定纹理
+    glBindTexture(GL_TEXTURE_2D, texture2);
+    // 为当前绑定的纹理对象设置环绕、过滤方式
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // 加载并生成纹理
+    stbi_set_flip_vertically_on_load(true);  // 设置加载图片时翻转一下 y 轴
+    data = stbi_load("./texture/awesomeface.png", &width, &height, &nrChannels, 0);
+    if (data == nullptr) {
+        std::cout << "load texture2 fail" << std::endl;
+        return;
+    }
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    stbi_image_free(data);
+
+    Shader shader("./shader/texture_shader.vs", "./shader/texture_shader.fs");
+    shader.use();  // 设置 uniform 变量之前需要先激活着色器程序！
+    // 设置采样器从哪个纹理单元读取数据，此处为 0
+    glUniform1i(glGetUniformLocation(shader.id_, "texture1"), 0);  // 手动设置
+    // 设置采样器从哪个纹理单元读取数据，此处为 1
+    shader.set_int("texture2", 1);  // 或者使用着色器类设置
+
+    float vertices[] = {
+        // ---- 位置 ----   ---- 颜色 ----    - 纹理坐标 -
+        0.5f,  0.5f,  0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f,  // 右上
+        0.5f,  -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f,  // 右下
+        -0.5f, -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f,  // 左下
+        -0.5f, 0.5f,  0.0f, 1.0f, 1.0f, 0.0f, 0.0f, 1.0f   // 左上
+    };
+    uint32_t indices[] = {
+        0, 1, 3,  // 第一个三角形
+        1, 2, 3,  // 第二个三角形
+    };
+
+    uint32_t Vbo, Vao, Ebo;
+    glGenVertexArrays(1, &Vao);
+    glGenBuffers(1, &Vbo);
+    glGenBuffers(1, &Ebo);
+    glBindVertexArray(Vao);
+    glBindBuffer(GL_ARRAY_BUFFER, Vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void *)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, Ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    while (!glfwWindowShouldClose(window)) {
+        processInput(window);
+
+        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        shader.use();
+        glBindVertexArray(Vao);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glDeleteVertexArrays(1, &Vao);
+    glDeleteBuffers(1, &Vbo);
+    glDeleteBuffers(1, &Ebo);
+
+    glfwTerminate();
+}
+
 int main()
 {
     // triagnle();
-    shader();
+    // shader();
+    texture();
     return 0;
 }
